@@ -18,10 +18,10 @@ category:            Network
 build-type:          Simple
 extra-doc-files:     README.md
                    , changelog.md
+                   
 source-repository head
   type:                git
   location:            https://github.com/dantiel/dropbox-api-haskell.git
-
 
 library
   ghc-options:         -Wall

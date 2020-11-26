@@ -1,152 +1,89 @@
-# discord-haskell           [![Build Status](https://travis-ci.org/dantiel/dropbox-haskell.png?branch=master)](https://travis-ci.org/dantiel/dropbox-haskell)        [![Hackage version](http://img.shields.io/hackage/v/discord-haskell.svg?label=Hackage)](https://hackage.haskell.org/package/discord-haskell)
+# Dropbox API          
 
-Build that discord bot in Haskell! Also checkout the [calamity](https://github.com/nitros12/calamity) 
-haskell discord library for a more advanced interface than `discord-haskell`.
-
-This is an example bot that replies "pong" to messages that start with "ping".
-
-```haskell
-{-# LANGUAGE OverloadedStrings #-}  -- allows "string literals" to be Text
-
-import Control.Monad (when)
-import Data.Text (isPrefixOf, toLower, Text)
-import qualified Data.Text.IO as TIO
-
-import UnliftIO
-
-import Discord
-import Discord.Types
-import qualified Discord.Requests as R
-
--- | Replies "pong" to every message that starts with "ping"
-pingpongExample :: IO ()
-pingpongExample = do userFacingError <- runDiscord $ def
-                                            { discordToken = "Bot ZZZZZZZZZZZZZZZZZZZ"
-                                            , discordOnEvent = eventHandler }
-                     TIO.putStrLn userFacingError
-
-eventHandler :: Event -> DiscordHandler ()
-eventHandler event = case event of
-       MessageCreate m -> when (not (fromBot m) && isPing (messageText m)) $ do
-               _ <- restCall (R.CreateReaction (messageChannel m, messageId m) "eyes")
-               threadDelay (4 * 10^6)
-               _ <- restCall (R.CreateMessage (messageChannel m) "Pong!")
-               pure ()
-       _ -> pure ()
-
-fromBot :: Message -> Bool
-fromBot m = userIsBot (messageAuthor m)
-
-isPing :: Text -> Bool
-isPing = ("ping" `isPrefixOf`) . toLower
-```
+Since [Dropbox supports Webhooks](https://dropbox.tech/developers/announcing-dropbox-webhooks) the api became feasable for use in webservices that may enhance the functionality of your dropbox. This Library provides functions and data types to use Dropbox API. Official dropbox docs <https://www.dropbox.com/developers/documentation/http/documentation>.
 
 
-### Installing
+## Usage Examples
 
-discord-haskell is on hosted on hackage at https://hackage.haskell.org/package/discord-haskell, 
+Note that these are not complete examples, because a webserver setup and database are also required.
 
-In `stack.yaml`
+### Webhook
 
-```yaml
-extra-deps:
-- emoji-0.1.0.2
-- discord-haskell-VERSION
-```
-
-In `project.cabal`
-
-```cabal
-executable haskell-bot
-  main-is:             src/Main.hs
-  default-language:    Haskell2010
-  ghc-options:         -threaded
-  build-depends:       base
-                     , text
-                     , discord-haskell
-```
-
-For a more complete example with various options go to 
-[Installing the Library](https://github.com/dantiel/dropbox-haskell/wiki/Installing-the-Library) wiki page
-
-Also take a look at 
-[Creating your first Bot](https://github.com/dantiel/dropbox-haskell/wiki/Creating-your-first-Bot)
-for some help setting up your bot token
-
-
-### Emoji
-
-For single character Emoji you can use the unicode name ("eyes", "fire", etc).
-
-For multi-character Emoji you must use the discord format. Type `\:emoji:` into
-a discord chat and paste that into the Text
-
-For example `:thumbsup::skin-tone-3:` is `"👍\127997"`. 
-A custom emoji will look like `<name:id_number>` or `name:id_number`.
-
-See [examples/ping-pong.hs](https://github.com/dantiel/dropbox-haskell/blob/master/examples/ping-pong.hs)
- for a `CreateReaction` request in use.
- 
-### Embeds
-
-Embeds are special messages with boarders and images. [Example embed created by discord-haskell](./examples/embed-photo.jpg)
-
-The `Embed` record (and sub-records) store embed data received from Discord.
-
-The `CreateEmbed` record stores data when we want to create an embed.
-
-`CreateEmbed` has a `Default` instance, so you only need to specify the fields you use:
+Initialize webhook just by responding with challenge of request.
 
 ```haskell
-_ <- restCall (R.CreateMessageEmbed <channel_id> "Pong!" $
-        def { createEmbedTitle = "Pong Embed"
-            , createEmbedImage = Just $ CreateEmbedImageUpload <bytestring>
-            , createEmbedThumbnail = Just $ CreateEmbedImageUrl
-                    "https://avatars2.githubusercontent.com/u/37496339"
-            })
+	get "/webhook" - do
+	  qs <- queryString <$> ask
+	  let maybeChallenge = lookupQuery "challenge" qs
+
+	  case maybeChallenge of
+	    Just challenge -> text $ challenge
+	    Nothing        -> text "error: no challenge set"
 ```
 
-Uploading a file each time is slow, prefer uploading images to a hosting site like imgur.com, and then referencing them.
- 
-### Limitations
+Example using `webhookHandler` with threads:
 
-The following features are not implemented:
+```haskell
+    post "/webhook" - do
+      lrb     <- lazyRequestBody <$> ask
+      lrb'    <- liftIO lrb
+      headers <- requestHeaders <$> ask
+      conf    <- liftIO $ appConfigFromEnv globalEnvConfig
+      isValid <- liftIO $ validateRequest conf headers lrb'
 
-- Voice & Audio
-- Authenticating with a user token
+      unless isValid $ error "invalid request"
 
-### Debugging
+      let forkhandler = map $ \u -> forkIO $ processUser u
+      rFork <- liftIO $ webhookHandler forkhandler $ lrb'
+	  
+      let withThreatId str threadid = do
+                                         _threadid <- threadid
+                                         pure $ str ++ show _threadid
+      y <- liftIO $ foldM withThreatId "" rFork
+	  
+      html . B.pack $ (B.unpack . BS.pack . BL.unpack $ lrb') ++ "\n--\n" ++ y
+```
 
-Always print the userFacingError Text returned from `runDiscord`. I use this to record
-errors that cannot be recovered from.
+### OAuth Authorization
 
-If something else goes wrong with the library please open an issue. It is helpful,
-but not always necessary, to attach a log of what's going on when the library
-crashes.
+```haskell
+    get "/authorize" - requiresCurrentUser session $ \username -> do
+      appKey      <- liftIO $ envAppKey globalEnvConfig
+      redirectUri <- liftIO $ oauthCallbackUrl
+      sessionUser <- currentUser session
+      html <=< redirectTo (dropboxAuthorizeUrl appKey redirectUri username) <<= pure ()
+```
 
-Assign a handler to the `discordOnLog :: Text -> IO ()` to print info as it happens.
-Remember to remove sensitive information before posting.
+```haskell
+    get "/oauth_callback" - do
+      (queryParam, params) <- queryParameter
 
-### Getting Help
+      case queryParam "code" of
+        Nothing -> error "No Code was found in the query string."
+        Just co -> do
+          -- The user email is transmitted in the state query parameter.
+          case queryParam "state" of
+            Nothing -> error "No State was found in the query string."
+            Just st -> do
+              conf <- liftIO . appConfigFromEnv $ globalEnvConfig
+              dropboxUser <- liftIO . fetchOauth2Token conf $ co
 
-#### Official discord docs
+              case dropboxUser of
+                Nothing -> error "Response String didnt have a valid user"
+                Just du -> do
+                  let token = userAccessToken du
+                      uid   = userAccountId   du
+                  newUserId <- liftIO $ createDropboxUser uid token
+                  liftIO $ setUserDropboxAccountId (B.unpack st) uid
 
-For a list of rest requests, gateway events, and gateway sendables go to the 
-[official discord documentation](https://discord.com/developers/docs/intro)
 
-The rest requests line up very closely. The documentation lists 
-[Get Channel](https://discord.com/developers/docs/resources/channel#get-channel)
-and discord-haskell has `GetChannel :: ChannelId -> ChannelRequest Channel`. Same for gateway `Event`s.
+                  -- TODO not ready yet. user needs to add a folder first ..
+                  -- liftIO $ processUser uid
 
-#### Examples
+                  html <=< redirectToIO doneUrl <<= pure ()
+```
 
-The [examples](https://github.com/dantiel/dropbox-haskell/tree/master/examples) were crafted
-to display a variety of use cases. Read them with care.
 
-#### Open an Issue
+### Other requests
 
-For deeper questions about how the library functions, feel free to open an issue.
-
-#### Discord server
-
-Coming sometime!
+...
