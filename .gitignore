@@ -1,0 +1,21 @@
+# As a library I won't commit the lock file
+stack.yaml.lock
+
+.cabal-sandbox/*
+.stack-work
+.stack/*
+**/.stack/*
+**/.stack-work/*
+cabal.sandbox.config
+docs/build
+shell.nix
+_cache
+_site
+*.hi
+*.o
+
+the-log-of-discord-haskell.txt
+examples/auth-token.secret
+upload-haddock.sh
+dist*
+
