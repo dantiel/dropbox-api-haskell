@@ -69,16 +69,12 @@ Example using `webhookHandler` with threads:
               dropboxUser <- liftIO . fetchOauth2Token conf $ co
 
               case dropboxUser of
-                Nothing -> error "Response String didnt have a valid user"
+                Nothing -> error "Response String didn't have a valid user."
                 Just du -> do
                   let token = userAccessToken du
                       uid   = userAccountId   du
-                  newUserId <- liftIO $ createDropboxUser uid token
+                  newUserId <- liftIO $ saveDropboxUserInDatabase uid token
                   liftIO $ setUserDropboxAccountId (B.unpack st) uid
-
-
-                  -- TODO not ready yet. user needs to add a folder first ..
-                  -- liftIO $ processUser uid
 
                   html <=< redirectToIO doneUrl <<= pure ()
 ```
