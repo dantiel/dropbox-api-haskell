@@ -7,6 +7,7 @@ Since [Dropbox supports Webhooks](https://dropbox.tech/developers/announcing-dro
 
 Note that these are not complete examples, because a webserver setup and database are also required.
 
+
 ### Webhook
 
 Initialize webhook just by responding with challenge of request.
@@ -44,6 +45,7 @@ Example using `webhookHandler` with threads:
       html . B.pack $ (B.unpack . BS.pack . BL.unpack $ lrb') ++ "\n--\n" ++ y
 ```
 
+
 ### OAuth Authorization
 
 ```haskell
@@ -80,6 +82,13 @@ Example using `webhookHandler` with threads:
 ```
 
 
-### Other requests
+### Other Requests
 
 ...
+
+
+## TODO / Further Development
+
+- [ ] add more requests and datatypes from API
+- [ ] add some utility procedures
+- [ ] add complete functioning example app
